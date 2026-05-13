@@ -1,0 +1,170 @@
+# Chinook models a digital music store: artists, albums, tracks, customers,
+# invoices, playlists, and employees. MySQL edition.
+
+database: chinook
+dialect: mysql
+description: >
+  Digital music store. Artists release Albums; Albums contain Tracks (each
+  with a genre and media type). Customers (managed by an Employee
+  representative) place Invoices with InvoiceLines for individual tracks.
+  Playlists are user-curated track lists.
+
+tables:
+
+  - name: Artist
+    description: One row per recording artist (band or solo musician).
+    columns:
+      ArtistId: { type: int, pk: true }
+      Name:     { type: nvarchar, hint: "Band/artist name, e.g. 'AC/DC', 'Iron Maiden'." }
+    example_questions:
+      - "How many artists are in the catalog?"
+      - "Find artists whose name contains 'metal'."
+
+  - name: Album
+    description: An album released by an artist. Contains many tracks.
+    columns:
+      AlbumId:  { type: int, pk: true }
+      Title:    { type: nvarchar }
+      ArtistId: { type: int, fk: "Artist.ArtistId" }
+    example_questions:
+      - "List all albums by 'AC/DC'."
+      - "Which artist has the most albums?"
+
+  - name: Track
+    description: An individual song. Belongs to an album, has a genre and media type.
+    columns:
+      TrackId:       { type: int, pk: true }
+      Name:          { type: nvarchar, hint: "Track title." }
+      AlbumId:       { type: int, fk: "Album.AlbumId", hint: "Nullable for orphaned tracks." }
+      MediaTypeId:   { type: int, fk: "MediaType.MediaTypeId" }
+      GenreId:       { type: int, fk: "Genre.GenreId" }
+      Composer:      { type: nvarchar, hint: "Free-text composer credit; often NULL." }
+      Milliseconds:  { type: int, hint: "Track length in ms. Divide by 60000 for minutes." }
+      Bytes:         { type: int }
+      UnitPrice:     { type: numeric, hint: "Price per track, usually 0.99 or 1.99." }
+    example_questions:
+      - "Top 10 longest tracks."
+      - "How many tracks are in the 'Rock' genre?"
+      - "Average track length in minutes by genre."
+
+  - name: Genre
+    description: Genre lookup (Rock, Jazz, Classical, etc.).
+    columns:
+      GenreId: { type: int, pk: true }
+      Name:    { type: nvarchar }
+    example_questions:
+      - "List all genres."
+
+  - name: MediaType
+    description: Audio format lookup (MPEG audio file, AAC, etc.).
+    columns:
+      MediaTypeId: { type: int, pk: true }
+      Name:        { type: nvarchar, hint: "e.g. 'MPEG audio file', 'Protected AAC audio file'." }
+
+  - name: Playlist
+    description: A user-curated set of tracks (Music, Movies, TV Shows, 90s, etc.).
+    columns:
+      PlaylistId: { type: int, pk: true }
+      Name:       { type: nvarchar }
+    example_questions:
+      - "Which playlist has the most tracks?"
+
+  - name: PlaylistTrack
+    description: Many-to-many bridge between Playlist and Track.
+    columns:
+      PlaylistId: { type: int, pk: true, fk: "Playlist.PlaylistId" }
+      TrackId:    { type: int, pk: true, fk: "Track.TrackId" }
+
+  - name: Customer
+    description: A purchaser at the digital store. Linked to a sales rep employee.
+    columns:
+      CustomerId:   { type: int, pk: true }
+      FirstName:    { type: nvarchar }
+      LastName:     { type: nvarchar }
+      Company:      { type: nvarchar, hint: "Nullable; corporate customer name." }
+      Address:      { type: nvarchar }
+      City:         { type: nvarchar }
+      State:        { type: nvarchar, hint: "Nullable for countries without states." }
+      Country:      { type: nvarchar }
+      PostalCode:   { type: nvarchar }
+      Phone:        { type: nvarchar }
+      Fax:          { type: nvarchar }
+      Email:        { type: nvarchar }
+      SupportRepId: { type: int, fk: "Employee.EmployeeId", hint: "The Employee assigned to this customer." }
+    example_questions:
+      - "How many customers are in each country?"
+      - "Top 10 customers by total spend."
+      - "Customers handled by employee Jane Peacock."
+
+  - name: Employee
+    description: >
+      Internal staff. Some are sales reps assigned to customers; others are
+      managers (ReportsTo references another Employee).
+    columns:
+      EmployeeId: { type: int, pk: true }
+      LastName:   { type: nvarchar }
+      FirstName:  { type: nvarchar }
+      Title:      { type: nvarchar, hint: "Job title, e.g. 'Sales Support Agent'." }
+      ReportsTo:  { type: int, fk: "Employee.EmployeeId", hint: "Self-FK for org chart; NULL at the top." }
+      BirthDate:  { type: datetime }
+      HireDate:   { type: datetime }
+      Address:    { type: nvarchar }
+      City:       { type: nvarchar }
+      State:      { type: nvarchar }
+      Country:    { type: nvarchar }
+      PostalCode: { type: nvarchar }
+      Phone:      { type: nvarchar }
+      Fax:        { type: nvarchar }
+      Email:      { type: nvarchar }
+    example_questions:
+      - "Who are the sales support agents?"
+      - "Show the org chart: each employee and their manager."
+
+  - name: Invoice
+    description: A purchase by a customer. Has many InvoiceLine rows (one per track).
+    columns:
+      InvoiceId:         { type: int, pk: true }
+      CustomerId:        { type: int, fk: "Customer.CustomerId" }
+      InvoiceDate:       { type: datetime }
+      BillingAddress:    { type: nvarchar }
+      BillingCity:       { type: nvarchar }
+      BillingState:      { type: nvarchar }
+      BillingCountry:    { type: nvarchar }
+      BillingPostalCode: { type: nvarchar }
+      Total:             { type: numeric, hint: "Sum of InvoiceLine amounts for convenience." }
+    example_questions:
+      - "Total revenue by year."
+      - "How many invoices were issued to customers in Germany?"
+
+  - name: InvoiceLine
+    description: One line on an invoice — a specific track purchased at a price/quantity.
+    columns:
+      InvoiceLineId: { type: int, pk: true }
+      InvoiceId:     { type: int, fk: "Invoice.InvoiceId" }
+      TrackId:       { type: int, fk: "Track.TrackId" }
+      UnitPrice:     { type: numeric }
+      Quantity:      { type: int }
+    example_questions:
+      - "Top 10 best-selling tracks by revenue."
+      - "Which genre generates the most revenue?"
+
+relationships:
+  - { from: Album,         to: Artist }
+  - { from: Track,         to: Album }
+  - { from: Track,         to: Genre }
+  - { from: Track,         to: MediaType }
+  - { from: PlaylistTrack, to: Playlist }
+  - { from: PlaylistTrack, to: Track }
+  - { from: Customer,      to: Employee, via: SupportRepId }
+  - { from: Employee,      to: Employee, via: ReportsTo }
+  - { from: Invoice,       to: Customer }
+  - { from: InvoiceLine,   to: Invoice }
+  - { from: InvoiceLine,   to: Track }
+
+dialect_notes:
+  - "Chinook tables and columns are PascalCase. Backticks are optional in MySQL but never wrong."
+  - "Date functions: YEAR(InvoiceDate), MONTH(InvoiceDate), DATE_FORMAT(...)."
+  - "Concatenate with CONCAT(), not ||."
+  - "LIMIT N for top-N. No TOP keyword."
+  - "Use IFNULL or COALESCE for NULL handling."
+  - "Track lengths are in milliseconds — divide by 60000 to get minutes."

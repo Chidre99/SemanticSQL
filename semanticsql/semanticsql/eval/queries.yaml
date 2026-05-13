@@ -1,0 +1,736 @@
+# SemanticSQL eval set
+#
+# 80 NL questions with hand-written ground-truth SQL. Distribution per DB:
+#   - 8  simple lookup        (count, single-column SELECT)
+#   - 12 filter + order       (WHERE + ORDER BY + LIMIT)
+#   - 10 single join
+#   - 6  multi-join + agg     (GROUP BY across 3+ tables)
+#   - 4  tricky               (subquery, CASE, date math, self-join, NOT EXISTS)
+#
+# `expected_row_count` is filled in by run_eval.py on first execution against
+# the ground-truth DB — that's a one-time backfill so the file becomes
+# self-contained for future runs.
+
+# ============================ PAGILA ============================
+
+- id: pagila_001
+  database: pagila
+  difficulty: simple
+  question: "How many films are in the database?"
+  ground_truth_sql: "SELECT COUNT(*) FROM film"
+
+- id: pagila_002
+  database: pagila
+  difficulty: simple
+  question: "How many actors are in the database?"
+  ground_truth_sql: "SELECT COUNT(*) FROM actor"
+
+- id: pagila_003
+  database: pagila
+  difficulty: simple
+  question: "How many categories of films are there?"
+  ground_truth_sql: "SELECT COUNT(*) FROM category"
+
+- id: pagila_004
+  database: pagila
+  difficulty: simple
+  question: "How many active customers do we have?"
+  ground_truth_sql: "SELECT COUNT(*) FROM customer WHERE activebool = TRUE"
+
+- id: pagila_005
+  database: pagila
+  difficulty: simple
+  question: "List the names of all film categories."
+  ground_truth_sql: "SELECT name FROM category ORDER BY name"
+
+- id: pagila_006
+  database: pagila
+  difficulty: simple
+  question: "How many stores are there?"
+  ground_truth_sql: "SELECT COUNT(*) FROM store"
+
+- id: pagila_007
+  database: pagila
+  difficulty: simple
+  question: "How many inventory items exist in total?"
+  ground_truth_sql: "SELECT COUNT(*) FROM inventory"
+
+- id: pagila_008
+  database: pagila
+  difficulty: simple
+  question: "How many languages do we have?"
+  ground_truth_sql: "SELECT COUNT(*) FROM language"
+
+- id: pagila_009
+  database: pagila
+  difficulty: filter_order
+  question: "How many films are rated PG-13?"
+  ground_truth_sql: "SELECT COUNT(*) FROM film WHERE rating = 'PG-13'"
+
+- id: pagila_010
+  database: pagila
+  difficulty: filter_order
+  question: "List films longer than 180 minutes, ordered by length descending."
+  ground_truth_sql: "SELECT title, length FROM film WHERE length > 180 ORDER BY length DESC"
+
+- id: pagila_011
+  database: pagila
+  difficulty: filter_order
+  question: "List actors whose last name starts with 'D', ordered alphabetically."
+  ground_truth_sql: "SELECT first_name, last_name FROM actor WHERE last_name ILIKE 'D%' ORDER BY last_name, first_name"
+
+- id: pagila_012
+  database: pagila
+  difficulty: filter_order
+  question: "Show the 10 most expensive films by replacement cost."
+  ground_truth_sql: "SELECT title, replacement_cost FROM film ORDER BY replacement_cost DESC, title LIMIT 10"
+
+- id: pagila_013
+  database: pagila
+  difficulty: filter_order
+  question: "Which films have a rental rate of 4.99?"
+  ground_truth_sql: "SELECT title FROM film WHERE rental_rate = 4.99 ORDER BY title"
+
+- id: pagila_014
+  database: pagila
+  difficulty: filter_order
+  question: "List customers whose email contains 'org', ordered by last name."
+  ground_truth_sql: "SELECT first_name, last_name, email FROM customer WHERE email ILIKE '%org%' ORDER BY last_name, first_name"
+
+- id: pagila_015
+  database: pagila
+  difficulty: filter_order
+  question: "How many films are in each rating category?"
+  ground_truth_sql: "SELECT rating, COUNT(*) AS film_count FROM film GROUP BY rating ORDER BY rating"
+
+- id: pagila_016
+  database: pagila
+  difficulty: filter_order
+  question: "What is the average rental rate across all films?"
+  ground_truth_sql: "SELECT AVG(rental_rate) AS avg_rental_rate FROM film"
+
+- id: pagila_017
+  database: pagila
+  difficulty: filter_order
+  question: "List the 5 shortest films."
+  ground_truth_sql: "SELECT title, length FROM film WHERE length IS NOT NULL ORDER BY length ASC, title LIMIT 5"
+
+- id: pagila_018
+  database: pagila
+  difficulty: filter_order
+  question: "How many rentals have not been returned yet?"
+  ground_truth_sql: "SELECT COUNT(*) FROM rental WHERE return_date IS NULL"
+
+- id: pagila_019
+  database: pagila
+  difficulty: filter_order
+  question: "What was the total revenue across all payments?"
+  ground_truth_sql: "SELECT SUM(amount) AS total_revenue FROM payment"
+
+- id: pagila_020
+  database: pagila
+  difficulty: filter_order
+  question: "List the top 10 customers by number of rentals."
+  ground_truth_sql: |
+    SELECT customer_id, COUNT(*) AS rental_count
+    FROM   rental
+    GROUP  BY customer_id
+    ORDER  BY rental_count DESC, customer_id
+    LIMIT  10
+
+- id: pagila_021
+  database: pagila
+  difficulty: single_join
+  question: "What language is the film 'ACADEMY DINOSAUR' in?"
+  ground_truth_sql: |
+    SELECT TRIM(l.name) AS language
+    FROM   film f
+    JOIN   language l ON l.language_id = f.language_id
+    WHERE  f.title = 'ACADEMY DINOSAUR'
+
+- id: pagila_022
+  database: pagila
+  difficulty: single_join
+  question: "How many copies of each film are in inventory? List the top 10."
+  ground_truth_sql: |
+    SELECT f.title, COUNT(*) AS copies
+    FROM   inventory i
+    JOIN   film f ON f.film_id = i.film_id
+    GROUP  BY f.title
+    ORDER  BY copies DESC, f.title
+    LIMIT  10
+
+- id: pagila_023
+  database: pagila
+  difficulty: single_join
+  question: "Which actors appear in the film 'ACADEMY DINOSAUR'?"
+  ground_truth_sql: |
+    SELECT a.first_name, a.last_name
+    FROM   film_actor fa
+    JOIN   actor a  ON a.actor_id = fa.actor_id
+    JOIN   film  f  ON f.film_id  = fa.film_id
+    WHERE  f.title = 'ACADEMY DINOSAUR'
+    ORDER  BY a.last_name, a.first_name
+
+- id: pagila_024
+  database: pagila
+  difficulty: single_join
+  question: "How many films are in each category?"
+  ground_truth_sql: |
+    SELECT c.name AS category, COUNT(*) AS film_count
+    FROM   film_category fc
+    JOIN   category c ON c.category_id = fc.category_id
+    GROUP  BY c.name
+    ORDER  BY film_count DESC, c.name
+
+- id: pagila_025
+  database: pagila
+  difficulty: single_join
+  question: "How many rentals did each staff member process?"
+  ground_truth_sql: |
+    SELECT s.first_name, s.last_name, COUNT(r.rental_id) AS rentals
+    FROM   staff s
+    LEFT JOIN rental r ON r.staff_id = s.staff_id
+    GROUP  BY s.staff_id, s.first_name, s.last_name
+    ORDER  BY rentals DESC
+
+- id: pagila_026
+  database: pagila
+  difficulty: single_join
+  question: "List all customers in California."
+  ground_truth_sql: |
+    SELECT c.first_name, c.last_name, c.email
+    FROM   customer c
+    JOIN   address  a ON a.address_id = c.address_id
+    WHERE  a.district = 'California'
+    ORDER  BY c.last_name, c.first_name
+
+- id: pagila_027
+  database: pagila
+  difficulty: single_join
+  question: "What is the total amount each customer has paid? Show the top 10."
+  ground_truth_sql: |
+    SELECT c.customer_id, c.first_name, c.last_name, SUM(p.amount) AS total_paid
+    FROM   customer c
+    JOIN   payment  p ON p.customer_id = c.customer_id
+    GROUP  BY c.customer_id, c.first_name, c.last_name
+    ORDER  BY total_paid DESC
+    LIMIT  10
+
+- id: pagila_028
+  database: pagila
+  difficulty: single_join
+  question: "How many films are in the 'Comedy' category?"
+  ground_truth_sql: |
+    SELECT COUNT(*) AS film_count
+    FROM   film_category fc
+    JOIN   category c ON c.category_id = fc.category_id
+    WHERE  c.name = 'Comedy'
+
+- id: pagila_029
+  database: pagila
+  difficulty: single_join
+  question: "List the 10 most rented films."
+  ground_truth_sql: |
+    SELECT f.title, COUNT(*) AS rental_count
+    FROM   rental    r
+    JOIN   inventory i ON i.inventory_id = r.inventory_id
+    JOIN   film      f ON f.film_id      = i.film_id
+    GROUP  BY f.title
+    ORDER  BY rental_count DESC, f.title
+    LIMIT  10
+
+- id: pagila_030
+  database: pagila
+  difficulty: single_join
+  question: "Total revenue per store."
+  ground_truth_sql: |
+    SELECT s.store_id, SUM(p.amount) AS revenue
+    FROM   payment  p
+    JOIN   staff    s ON s.staff_id = p.staff_id
+    GROUP  BY s.store_id
+    ORDER  BY revenue DESC
+
+- id: pagila_031
+  database: pagila
+  difficulty: multi_join_agg
+  question: "Average rental rate per category, ordered by rate descending."
+  ground_truth_sql: |
+    SELECT c.name AS category, AVG(f.rental_rate) AS avg_rental_rate
+    FROM   category   c
+    JOIN   film_category fc ON fc.category_id = c.category_id
+    JOIN   film       f    ON f.film_id     = fc.film_id
+    GROUP  BY c.name
+    ORDER  BY avg_rental_rate DESC, c.name
+
+- id: pagila_032
+  database: pagila
+  difficulty: multi_join_agg
+  question: "Which country generated the most revenue?"
+  ground_truth_sql: |
+    SELECT co.country, SUM(p.amount) AS revenue
+    FROM   payment  p
+    JOIN   customer cu ON cu.customer_id = p.customer_id
+    JOIN   address  a  ON a.address_id   = cu.address_id
+    JOIN   city     ci ON ci.city_id     = a.city_id
+    JOIN   country  co ON co.country_id  = ci.country_id
+    GROUP  BY co.country
+    ORDER  BY revenue DESC
+    LIMIT  1
+
+- id: pagila_033
+  database: pagila
+  difficulty: multi_join_agg
+  question: "Top 5 actors who have appeared in the most films."
+  ground_truth_sql: |
+    SELECT a.first_name, a.last_name, COUNT(*) AS film_count
+    FROM   actor      a
+    JOIN   film_actor fa ON fa.actor_id = a.actor_id
+    GROUP  BY a.actor_id, a.first_name, a.last_name
+    ORDER  BY film_count DESC, a.last_name
+    LIMIT  5
+
+- id: pagila_034
+  database: pagila
+  difficulty: multi_join_agg
+  question: "Average film length per category."
+  ground_truth_sql: |
+    SELECT c.name AS category, AVG(f.length) AS avg_length
+    FROM   category   c
+    JOIN   film_category fc ON fc.category_id = c.category_id
+    JOIN   film       f    ON f.film_id     = fc.film_id
+    GROUP  BY c.name
+    ORDER  BY avg_length DESC, c.name
+
+- id: pagila_035
+  database: pagila
+  difficulty: multi_join_agg
+  question: "Revenue by month in 2007."
+  ground_truth_sql: |
+    SELECT DATE_TRUNC('month', p.payment_date) AS month, SUM(p.amount) AS revenue
+    FROM   payment p
+    WHERE  EXTRACT(YEAR FROM p.payment_date) = 2007
+    GROUP  BY month
+    ORDER  BY month
+
+- id: pagila_036
+  database: pagila
+  difficulty: multi_join_agg
+  question: "Top 5 cities by customer count."
+  ground_truth_sql: |
+    SELECT ci.city, COUNT(*) AS customers
+    FROM   customer cu
+    JOIN   address  a  ON a.address_id = cu.address_id
+    JOIN   city     ci ON ci.city_id   = a.city_id
+    GROUP  BY ci.city
+    ORDER  BY customers DESC, ci.city
+    LIMIT  5
+
+- id: pagila_037
+  database: pagila
+  difficulty: tricky
+  question: "For each film rating, what percentage of films are longer than 2 hours?"
+  ground_truth_sql: |
+    SELECT rating,
+           ROUND(100.0 * SUM(CASE WHEN length > 120 THEN 1 ELSE 0 END) / COUNT(*), 2) AS pct_over_2h
+    FROM   film
+    GROUP  BY rating
+    ORDER  BY rating
+
+- id: pagila_038
+  database: pagila
+  difficulty: tricky
+  question: "Find customers who have never made a payment."
+  ground_truth_sql: |
+    SELECT c.customer_id, c.first_name, c.last_name
+    FROM   customer c
+    WHERE  NOT EXISTS (SELECT 1 FROM payment p WHERE p.customer_id = c.customer_id)
+    ORDER  BY c.customer_id
+
+- id: pagila_039
+  database: pagila
+  difficulty: tricky
+  question: "Find films that have never been rented."
+  ground_truth_sql: |
+    SELECT f.film_id, f.title
+    FROM   film f
+    WHERE  NOT EXISTS (
+        SELECT 1
+        FROM   inventory i
+        JOIN   rental    r ON r.inventory_id = i.inventory_id
+        WHERE  i.film_id = f.film_id
+    )
+    ORDER  BY f.title
+
+- id: pagila_040
+  database: pagila
+  difficulty: tricky
+  question: "Average days between rental and return per film, top 5 longest."
+  ground_truth_sql: |
+    SELECT f.title,
+           AVG(EXTRACT(EPOCH FROM (r.return_date - r.rental_date)) / 86400.0) AS avg_days
+    FROM   rental    r
+    JOIN   inventory i ON i.inventory_id = r.inventory_id
+    JOIN   film      f ON f.film_id      = i.film_id
+    WHERE  r.return_date IS NOT NULL
+    GROUP  BY f.title
+    ORDER  BY avg_days DESC
+    LIMIT  5
+
+# ============================ CHINOOK ============================
+
+- id: chinook_001
+  database: chinook
+  difficulty: simple
+  question: "How many tracks are in the catalog?"
+  ground_truth_sql: "SELECT COUNT(*) FROM Track"
+
+- id: chinook_002
+  database: chinook
+  difficulty: simple
+  question: "How many artists are there?"
+  ground_truth_sql: "SELECT COUNT(*) FROM Artist"
+
+- id: chinook_003
+  database: chinook
+  difficulty: simple
+  question: "How many albums are there?"
+  ground_truth_sql: "SELECT COUNT(*) FROM Album"
+
+- id: chinook_004
+  database: chinook
+  difficulty: simple
+  question: "List all genre names."
+  ground_truth_sql: "SELECT Name FROM Genre ORDER BY Name"
+
+- id: chinook_005
+  database: chinook
+  difficulty: simple
+  question: "How many customers are there?"
+  ground_truth_sql: "SELECT COUNT(*) FROM Customer"
+
+- id: chinook_006
+  database: chinook
+  difficulty: simple
+  question: "List all media type names."
+  ground_truth_sql: "SELECT Name FROM MediaType ORDER BY Name"
+
+- id: chinook_007
+  database: chinook
+  difficulty: simple
+  question: "How many invoices have been issued?"
+  ground_truth_sql: "SELECT COUNT(*) FROM Invoice"
+
+- id: chinook_008
+  database: chinook
+  difficulty: simple
+  question: "How many playlists exist?"
+  ground_truth_sql: "SELECT COUNT(*) FROM Playlist"
+
+- id: chinook_009
+  database: chinook
+  difficulty: filter_order
+  question: "Find artists whose name contains 'Metal'."
+  ground_truth_sql: "SELECT Name FROM Artist WHERE Name LIKE '%Metal%' ORDER BY Name"
+
+- id: chinook_010
+  database: chinook
+  difficulty: filter_order
+  question: "Top 10 longest tracks (by milliseconds)."
+  ground_truth_sql: "SELECT Name, Milliseconds FROM Track ORDER BY Milliseconds DESC, Name LIMIT 10"
+
+- id: chinook_011
+  database: chinook
+  difficulty: filter_order
+  question: "How many customers are in each country?"
+  ground_truth_sql: "SELECT Country, COUNT(*) AS customers FROM Customer GROUP BY Country ORDER BY customers DESC, Country"
+
+- id: chinook_012
+  database: chinook
+  difficulty: filter_order
+  question: "List the 5 most expensive tracks (by unit price)."
+  ground_truth_sql: "SELECT Name, UnitPrice FROM Track ORDER BY UnitPrice DESC, Name LIMIT 5"
+
+- id: chinook_013
+  database: chinook
+  difficulty: filter_order
+  question: "List all employees with the title 'Sales Support Agent'."
+  ground_truth_sql: "SELECT FirstName, LastName FROM Employee WHERE Title = 'Sales Support Agent' ORDER BY LastName, FirstName"
+
+- id: chinook_014
+  database: chinook
+  difficulty: filter_order
+  question: "How many tracks cost exactly $0.99?"
+  ground_truth_sql: "SELECT COUNT(*) FROM Track WHERE UnitPrice = 0.99"
+
+- id: chinook_015
+  database: chinook
+  difficulty: filter_order
+  question: "What is the total revenue across all invoices?"
+  ground_truth_sql: "SELECT SUM(Total) AS total_revenue FROM Invoice"
+
+- id: chinook_016
+  database: chinook
+  difficulty: filter_order
+  question: "Average track length in minutes (across all tracks)."
+  ground_truth_sql: "SELECT AVG(Milliseconds) / 60000.0 AS avg_minutes FROM Track"
+
+- id: chinook_017
+  database: chinook
+  difficulty: filter_order
+  question: "List the top 5 customers by total invoice spend."
+  ground_truth_sql: |
+    SELECT CustomerId, SUM(Total) AS total_spent
+    FROM   Invoice
+    GROUP  BY CustomerId
+    ORDER  BY total_spent DESC, CustomerId
+    LIMIT  5
+
+- id: chinook_018
+  database: chinook
+  difficulty: filter_order
+  question: "How many invoices were issued in 2010?"
+  ground_truth_sql: "SELECT COUNT(*) FROM Invoice WHERE YEAR(InvoiceDate) = 2010"
+
+- id: chinook_019
+  database: chinook
+  difficulty: filter_order
+  question: "List the names of the playlists, ordered alphabetically."
+  ground_truth_sql: "SELECT Name FROM Playlist ORDER BY Name"
+
+- id: chinook_020
+  database: chinook
+  difficulty: filter_order
+  question: "How many tracks per genre? Order from most to least."
+  ground_truth_sql: |
+    SELECT GenreId, COUNT(*) AS track_count
+    FROM   Track
+    GROUP  BY GenreId
+    ORDER  BY track_count DESC
+
+- id: chinook_021
+  database: chinook
+  difficulty: single_join
+  question: "How many tracks are in the 'Rock' genre?"
+  ground_truth_sql: |
+    SELECT COUNT(*) AS rock_tracks
+    FROM   Track t
+    JOIN   Genre g ON g.GenreId = t.GenreId
+    WHERE  g.Name = 'Rock'
+
+- id: chinook_022
+  database: chinook
+  difficulty: single_join
+  question: "List all albums by 'AC/DC'."
+  ground_truth_sql: |
+    SELECT al.Title
+    FROM   Album al
+    JOIN   Artist ar ON ar.ArtistId = al.ArtistId
+    WHERE  ar.Name = 'AC/DC'
+    ORDER  BY al.Title
+
+- id: chinook_023
+  database: chinook
+  difficulty: single_join
+  question: "Which artist has the most albums? Show the top 5."
+  ground_truth_sql: |
+    SELECT ar.Name, COUNT(*) AS album_count
+    FROM   Artist ar
+    JOIN   Album  al ON al.ArtistId = ar.ArtistId
+    GROUP  BY ar.ArtistId, ar.Name
+    ORDER  BY album_count DESC, ar.Name
+    LIMIT  5
+
+- id: chinook_024
+  database: chinook
+  difficulty: single_join
+  question: "List the tracks on the album 'For Those About To Rock We Salute You'."
+  ground_truth_sql: |
+    SELECT t.Name
+    FROM   Track t
+    JOIN   Album a ON a.AlbumId = t.AlbumId
+    WHERE  a.Title = 'For Those About To Rock We Salute You'
+    ORDER  BY t.TrackId
+
+- id: chinook_025
+  database: chinook
+  difficulty: single_join
+  question: "How many customers does each support rep handle?"
+  ground_truth_sql: |
+    SELECT e.FirstName, e.LastName, COUNT(c.CustomerId) AS customers
+    FROM   Employee e
+    LEFT JOIN Customer c ON c.SupportRepId = e.EmployeeId
+    GROUP  BY e.EmployeeId, e.FirstName, e.LastName
+    ORDER  BY customers DESC, e.LastName
+
+- id: chinook_026
+  database: chinook
+  difficulty: single_join
+  question: "List all tracks on the 'Music' playlist (limit 20)."
+  ground_truth_sql: |
+    SELECT t.Name
+    FROM   PlaylistTrack pt
+    JOIN   Playlist p ON p.PlaylistId = pt.PlaylistId
+    JOIN   Track    t ON t.TrackId    = pt.TrackId
+    WHERE  p.Name = 'Music'
+    ORDER  BY t.Name
+    LIMIT  20
+
+- id: chinook_027
+  database: chinook
+  difficulty: single_join
+  question: "Total revenue per customer, top 10."
+  ground_truth_sql: |
+    SELECT c.CustomerId, c.FirstName, c.LastName, SUM(i.Total) AS total
+    FROM   Customer c
+    JOIN   Invoice  i ON i.CustomerId = c.CustomerId
+    GROUP  BY c.CustomerId, c.FirstName, c.LastName
+    ORDER  BY total DESC, c.LastName
+    LIMIT  10
+
+- id: chinook_028
+  database: chinook
+  difficulty: single_join
+  question: "How many tracks are of media type 'Protected AAC audio file'?"
+  ground_truth_sql: |
+    SELECT COUNT(*) AS cnt
+    FROM   Track t
+    JOIN   MediaType m ON m.MediaTypeId = t.MediaTypeId
+    WHERE  m.Name = 'Protected AAC audio file'
+
+- id: chinook_029
+  database: chinook
+  difficulty: single_join
+  question: "Average track length per genre, in minutes."
+  ground_truth_sql: |
+    SELECT g.Name AS genre, AVG(t.Milliseconds) / 60000.0 AS avg_minutes
+    FROM   Genre g
+    JOIN   Track t ON t.GenreId = g.GenreId
+    GROUP  BY g.Name
+    ORDER  BY avg_minutes DESC, g.Name
+
+- id: chinook_030
+  database: chinook
+  difficulty: single_join
+  question: "List all invoices for customers in Brazil."
+  ground_truth_sql: |
+    SELECT i.InvoiceId, i.InvoiceDate, i.Total
+    FROM   Invoice  i
+    JOIN   Customer c ON c.CustomerId = i.CustomerId
+    WHERE  c.Country = 'Brazil'
+    ORDER  BY i.InvoiceDate
+
+- id: chinook_031
+  database: chinook
+  difficulty: multi_join_agg
+  question: "Top 10 best-selling tracks by total revenue."
+  ground_truth_sql: |
+    SELECT t.Name, SUM(il.UnitPrice * il.Quantity) AS revenue
+    FROM   Track       t
+    JOIN   InvoiceLine il ON il.TrackId = t.TrackId
+    GROUP  BY t.TrackId, t.Name
+    ORDER  BY revenue DESC, t.Name
+    LIMIT  10
+
+- id: chinook_032
+  database: chinook
+  difficulty: multi_join_agg
+  question: "Which genre generated the most revenue?"
+  ground_truth_sql: |
+    SELECT g.Name AS genre, SUM(il.UnitPrice * il.Quantity) AS revenue
+    FROM   Genre        g
+    JOIN   Track        t  ON t.GenreId  = g.GenreId
+    JOIN   InvoiceLine  il ON il.TrackId = t.TrackId
+    GROUP  BY g.Name
+    ORDER  BY revenue DESC
+    LIMIT  1
+
+- id: chinook_033
+  database: chinook
+  difficulty: multi_join_agg
+  question: "Total revenue per year."
+  ground_truth_sql: |
+    SELECT YEAR(InvoiceDate) AS year, SUM(Total) AS revenue
+    FROM   Invoice
+    GROUP  BY YEAR(InvoiceDate)
+    ORDER  BY year
+
+- id: chinook_034
+  database: chinook
+  difficulty: multi_join_agg
+  question: "Top 5 artists by total revenue."
+  ground_truth_sql: |
+    SELECT ar.Name AS artist, SUM(il.UnitPrice * il.Quantity) AS revenue
+    FROM   Artist      ar
+    JOIN   Album       al ON al.ArtistId = ar.ArtistId
+    JOIN   Track       t  ON t.AlbumId   = al.AlbumId
+    JOIN   InvoiceLine il ON il.TrackId  = t.TrackId
+    GROUP  BY ar.ArtistId, ar.Name
+    ORDER  BY revenue DESC, ar.Name
+    LIMIT  5
+
+- id: chinook_035
+  database: chinook
+  difficulty: multi_join_agg
+  question: "Revenue per country, top 10."
+  ground_truth_sql: |
+    SELECT BillingCountry, SUM(Total) AS revenue
+    FROM   Invoice
+    GROUP  BY BillingCountry
+    ORDER  BY revenue DESC, BillingCountry
+    LIMIT  10
+
+- id: chinook_036
+  database: chinook
+  difficulty: multi_join_agg
+  question: "Average invoice total per country."
+  ground_truth_sql: |
+    SELECT BillingCountry, AVG(Total) AS avg_total
+    FROM   Invoice
+    GROUP  BY BillingCountry
+    ORDER  BY avg_total DESC, BillingCountry
+
+- id: chinook_037
+  database: chinook
+  difficulty: tricky
+  question: "Find customers who have never made a purchase."
+  ground_truth_sql: |
+    SELECT c.CustomerId, c.FirstName, c.LastName
+    FROM   Customer c
+    WHERE  NOT EXISTS (SELECT 1 FROM Invoice i WHERE i.CustomerId = c.CustomerId)
+    ORDER  BY c.CustomerId
+
+- id: chinook_038
+  database: chinook
+  difficulty: tricky
+  question: "For each employee, show their manager's full name (self-join)."
+  ground_truth_sql: |
+    SELECT CONCAT(e.FirstName, ' ', e.LastName)  AS employee,
+           CONCAT(m.FirstName, ' ', m.LastName)  AS manager
+    FROM   Employee e
+    LEFT JOIN Employee m ON m.EmployeeId = e.ReportsTo
+    ORDER  BY e.LastName, e.FirstName
+
+- id: chinook_039
+  database: chinook
+  difficulty: tricky
+  question: "Tracks that are longer than the average track length."
+  ground_truth_sql: |
+    SELECT Name, Milliseconds
+    FROM   Track
+    WHERE  Milliseconds > (SELECT AVG(Milliseconds) FROM Track)
+    ORDER  BY Milliseconds DESC
+
+- id: chinook_040
+  database: chinook
+  difficulty: tricky
+  question: "For each genre, the share of total revenue as a percentage."
+  ground_truth_sql: |
+    SELECT g.Name AS genre,
+           ROUND(100.0 * SUM(il.UnitPrice * il.Quantity)
+                       / (SELECT SUM(UnitPrice * Quantity) FROM InvoiceLine), 2) AS pct_revenue
+    FROM   Genre        g
+    JOIN   Track        t  ON t.GenreId  = g.GenreId
+    JOIN   InvoiceLine  il ON il.TrackId = t.TrackId
+    GROUP  BY g.Name
+    ORDER  BY pct_revenue DESC, g.Name

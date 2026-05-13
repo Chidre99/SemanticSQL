@@ -1,0 +1,228 @@
+# Pagila is a port of the Sakila sample database for PostgreSQL.
+# It models a fictional DVD rental store: customers, films, inventory,
+# rentals, payments, staff, stores, addresses.
+#
+# This file is read by backend/app/rag/indexer.py to populate ChromaDB.
+# Each table block becomes one or more retrievable chunks.
+
+database: pagila
+dialect: postgres
+description: >
+  DVD rental store schema. The core flow is: customers (linked to addresses
+  and stores) rent inventory copies of films; rentals generate payments;
+  films belong to categories and feature actors. Staff process rentals.
+
+tables:
+
+  - name: actor
+    description: One row per actor who appears in any film. Linked to films via film_actor.
+    columns:
+      actor_id:    { type: integer, pk: true, hint: "Surrogate key." }
+      first_name:  { type: varchar, hint: "Given name. Often used to search." }
+      last_name:   { type: varchar, hint: "Surname. Stored uppercase in some installs." }
+      last_update: { type: timestamp, hint: "Mostly metadata; rarely useful." }
+    example_questions:
+      - "How many actors are in the database?"
+      - "List actors whose last name starts with 'D'."
+      - "Which actor has appeared in the most films?"
+
+  - name: address
+    description: Postal address; referenced by customer, staff, and store.
+    columns:
+      address_id:  { type: integer, pk: true }
+      address:     { type: varchar }
+      address2:    { type: varchar, hint: "Often NULL." }
+      district:    { type: varchar, hint: "State / province / region." }
+      city_id:     { type: integer, fk: "city.city_id" }
+      postal_code: { type: varchar }
+      phone:       { type: varchar }
+    example_questions:
+      - "What district is customer 5 in?"
+      - "How many addresses are in Alberta?"
+
+  - name: category
+    description: Film genre lookup table (Action, Comedy, etc.). 16 rows.
+    columns:
+      category_id: { type: integer, pk: true }
+      name:        { type: varchar, hint: "Genre name; cardinality ~16." }
+    example_questions:
+      - "List all film categories."
+      - "How many films are in the Comedy category?"
+
+  - name: city
+    description: City lookup. Links country to address.
+    columns:
+      city_id:    { type: integer, pk: true }
+      city:       { type: varchar }
+      country_id: { type: integer, fk: "country.country_id" }
+
+  - name: country
+    description: Country lookup.
+    columns:
+      country_id: { type: integer, pk: true }
+      country:    { type: varchar, hint: "e.g. 'Canada', 'United States', 'India'." }
+    example_questions:
+      - "Which countries have the most customers?"
+
+  - name: customer
+    description: One row per customer. Links to address (billing) and store (home store).
+    columns:
+      customer_id: { type: integer, pk: true }
+      store_id:    { type: integer, fk: "store.store_id" }
+      first_name:  { type: varchar }
+      last_name:   { type: varchar }
+      email:       { type: varchar }
+      address_id:  { type: integer, fk: "address.address_id" }
+      activebool:  { type: boolean, hint: "TRUE if account is currently active." }
+      create_date: { type: date }
+      last_update: { type: timestamp }
+      active:      { type: integer, hint: "Legacy int flag; 1 = active. Prefer activebool." }
+    example_questions:
+      - "How many active customers do we have?"
+      - "List the top 10 customers by total payments."
+      - "Which customers have not rented anything in 2022?"
+
+  - name: film
+    description: One row per film title. The richest table in the schema.
+    columns:
+      film_id:          { type: integer, pk: true }
+      title:            { type: varchar }
+      description:      { type: text }
+      release_year:     { type: integer, hint: "Year of release, e.g. 2006." }
+      language_id:      { type: integer, fk: "language.language_id" }
+      original_language_id: { type: integer, fk: "language.language_id", hint: "Often NULL." }
+      rental_duration:  { type: integer, hint: "Default rental period in days." }
+      rental_rate:      { type: numeric, hint: "Cost per rental, e.g. 4.99." }
+      length:           { type: integer, hint: "Runtime in minutes." }
+      replacement_cost: { type: numeric }
+      rating:           { type: mpaa_rating, hint: "Enum: G, PG, PG-13, R, NC-17." }
+      last_update:      { type: timestamp }
+      special_features: { type: "text[]", hint: "Array of strings: 'Trailers','Commentaries','Deleted Scenes','Behind the Scenes'." }
+      fulltext:         { type: tsvector, hint: "Full-text search index over title+description; rarely queried directly." }
+    enums:
+      rating: ["G", "PG", "PG-13", "R", "NC-17"]
+      special_features: ["Trailers", "Commentaries", "Deleted Scenes", "Behind the Scenes"]
+    example_questions:
+      - "How many films are rated PG-13?"
+      - "What is the average rental rate by rating?"
+      - "List films longer than 2 hours."
+      - "Which films have 'Deleted Scenes' as a special feature?"
+
+  - name: film_actor
+    description: Many-to-many bridge between films and actors.
+    columns:
+      actor_id:    { type: integer, pk: true, fk: "actor.actor_id" }
+      film_id:     { type: integer, pk: true, fk: "film.film_id" }
+      last_update: { type: timestamp }
+    example_questions:
+      - "Which actors appear in the film 'ACADEMY DINOSAUR'?"
+
+  - name: film_category
+    description: Many-to-many bridge between films and categories.
+    columns:
+      film_id:     { type: integer, pk: true, fk: "film.film_id" }
+      category_id: { type: integer, pk: true, fk: "category.category_id" }
+      last_update: { type: timestamp }
+
+  - name: inventory
+    description: >
+      A copy of a film at a specific store. One film can have many inventory rows.
+      Rentals reference inventory, not film directly.
+    columns:
+      inventory_id: { type: integer, pk: true }
+      film_id:      { type: integer, fk: "film.film_id" }
+      store_id:     { type: integer, fk: "store.store_id" }
+      last_update:  { type: timestamp }
+    example_questions:
+      - "How many copies of 'BUCKET BROTHERHOOD' does store 1 own?"
+
+  - name: language
+    description: Language lookup for films (English, Italian, Japanese, etc.).
+    columns:
+      language_id: { type: integer, pk: true }
+      name:        { type: varchar, hint: "Fixed-width CHAR(20); trim before display." }
+
+  - name: payment
+    description: One row per payment a customer made for a rental.
+    columns:
+      payment_id:   { type: integer, pk: true }
+      customer_id:  { type: integer, fk: "customer.customer_id" }
+      staff_id:     { type: integer, fk: "staff.staff_id" }
+      rental_id:    { type: integer, fk: "rental.rental_id" }
+      amount:       { type: numeric, hint: "Money charged, e.g. 4.99." }
+      payment_date: { type: timestamp }
+    example_questions:
+      - "What were total payments in 2022?"
+      - "Top 5 staff members by total payments processed."
+      - "What is the average payment amount?"
+
+  - name: rental
+    description: One row per rental transaction. Links customer to a specific inventory copy.
+    columns:
+      rental_id:    { type: integer, pk: true }
+      rental_date:  { type: timestamp }
+      inventory_id: { type: integer, fk: "inventory.inventory_id" }
+      customer_id:  { type: integer, fk: "customer.customer_id" }
+      return_date:  { type: timestamp, hint: "NULL if the rental has not been returned yet." }
+      staff_id:     { type: integer, fk: "staff.staff_id" }
+      last_update:  { type: timestamp }
+    example_questions:
+      - "How many rentals were not returned?"
+      - "Average rental duration in days."
+      - "Top 10 most rented films."
+
+  - name: staff
+    description: Employees who process rentals at a store.
+    columns:
+      staff_id:    { type: integer, pk: true }
+      first_name:  { type: varchar }
+      last_name:   { type: varchar }
+      address_id:  { type: integer, fk: "address.address_id" }
+      email:       { type: varchar }
+      store_id:    { type: integer, fk: "store.store_id" }
+      active:      { type: boolean }
+      username:    { type: varchar }
+      password:    { type: varchar, hint: "Hashed; do not return in queries." }
+      last_update: { type: timestamp }
+      picture:     { type: bytea, hint: "Binary image; never SELECT." }
+
+  - name: store
+    description: A physical rental store. Has a manager and an address.
+    columns:
+      store_id:          { type: integer, pk: true }
+      manager_staff_id:  { type: integer, fk: "staff.staff_id" }
+      address_id:        { type: integer, fk: "address.address_id" }
+      last_update:       { type: timestamp }
+
+# Convenient pre-computed FK adjacency for the retriever's expansion step.
+# (The retriever can also build this from `tables[].columns[].fk` — duplicated here for clarity.)
+relationships:
+  - { from: customer,       to: address }
+  - { from: customer,       to: store }
+  - { from: staff,          to: address }
+  - { from: staff,          to: store }
+  - { from: store,          to: staff,    via: manager_staff_id }
+  - { from: store,          to: address }
+  - { from: address,        to: city }
+  - { from: city,           to: country }
+  - { from: film,           to: language }
+  - { from: film_actor,     to: film }
+  - { from: film_actor,     to: actor }
+  - { from: film_category,  to: film }
+  - { from: film_category,  to: category }
+  - { from: inventory,      to: film }
+  - { from: inventory,      to: store }
+  - { from: rental,         to: inventory }
+  - { from: rental,         to: customer }
+  - { from: rental,         to: staff }
+  - { from: payment,        to: customer }
+  - { from: payment,        to: staff }
+  - { from: payment,        to: rental }
+
+dialect_notes:
+  - "Pagila uses TIMESTAMP WITHOUT TIME ZONE for *_date columns."
+  - "Use EXTRACT(YEAR FROM payment_date) = 2022 — never strftime."
+  - "String functions are LOWER()/UPPER(), not LCASE/UCASE."
+  - "Concatenation is ||, not +."
+  - "LIMIT for top-N. No TOP keyword."
+  - "Use COALESCE for NULL handling."
